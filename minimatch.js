@@ -26,6 +26,16 @@ const plTypes = {
   '@': { open: '(?:', close: ')' }
 }
 
+// Map of which extglob types can adopt the children of a nested extglob,
+// allowing the nesting to be flattened without changing match semantics.
+var adoptionMap = {
+  '*': ['*', '+', '?', '@'],
+  '+': ['+', '@'],
+  '?': ['?', '@'],
+  '@': ['@'],
+  '!': ['!', '@']
+}
+
 // any single thing other than /
 // don't need to escape / when using new RegExp()
 const qmark = '[^/]'
@@ -614,17 +624,44 @@ class Minimatch {
             continue
           }
 
+          var maxER = options.maxExtglobRecursion !== undefined
+            ? options.maxExtglobRecursion : 2
+          var extParent = null
+          for (var extK = patternListStack.length - 1; extK >= 0; extK--) {
+            if (!patternListStack[extK].adopted) {
+              extParent = patternListStack[extK]
+              break
+            }
+          }
+          var extDepth = 0
+          for (var extK = 0; extK < patternListStack.length; extK++) {
+            if (!patternListStack[extK].adopted) extDepth++
+          }
+          var extCanAdopt = !!(extParent &&
+            adoptionMap[extParent.type] &&
+            adoptionMap[extParent.type].indexOf(stateChar) !== -1)
+
+          if (!extCanAdopt && extDepth > maxER) {
+            re += '\\' + stateChar + '\\('
+            stateChar = false
+            continue
+          }
+
+          var extIsAdopted = extCanAdopt
           const plEntry = {
             type: stateChar,
             start: i - 1,
             reStart: re.length,
-            open: plTypes[stateChar].open,
-            close: plTypes[stateChar].close,
+            open: extIsAdopted ? '' : plTypes[stateChar].open,
+            close: extIsAdopted ? '' : plTypes[stateChar].close,
+            adopted: extIsAdopted,
           }
           this.debug(this.pattern, '\t', plEntry)
           patternListStack.push(plEntry)
           // negation is (?:(?!(?:js)(?:<rest>))[^/]*)
-          re += plEntry.open
+          if (!extIsAdopted) {
+            re += plEntry.open
+          }
           // next entry starts with a dot maybe?
           if (plEntry.start === 0 && plEntry.type !== '!') {
             dotTravAllowed = true
@@ -650,7 +687,7 @@ class Minimatch {
           // negation is (?:(?!js)[^/]*)
           // The others are (?:<pattern>)<type>
           re += pl.close
-          if (pl.type === '!') {
+          if (pl.type === '!' && !pl.adopted) {
             negativeLists.push(Object.assign(pl, { reEnd: re.length }))
           }
           continue
@@ -775,7 +812,8 @@ class Minimatch {
       })
 
       this.debug('tail=%j\n   %s', tail, tail, pl, re)
-      const t = pl.type === '*' ? star
+      const t = pl.adopted ? ('\\' + pl.type)
+        : pl.type === '*' ? star
         : pl.type === '?' ? qmark
         : '\\' + pl.type
 
