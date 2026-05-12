@@ -5,12 +5,16 @@
   "publishConfig": {
     "tag": "legacy-v5"
   },
-  "version": "5.1.6",
+  "version": "5.1.6-sp1",
   "repository": {
     "type": "git",
     "url": "git://github.com/isaacs/minimatch.git"
   },
   "main": "minimatch.js",
+  "tap": {
+    "coverage": false,
+    "check-coverage": false
+  },
   "scripts": {
     "test": "tap",
     "snap": "tap",
