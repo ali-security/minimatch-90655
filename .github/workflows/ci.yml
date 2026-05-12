@@ -10,12 +10,19 @@ jobs:
         platform:
         - os: ubuntu-latest
           shell: bash
-        - os: macos-13
+        - os: macos-latest
           shell: bash
         - os: windows-latest
           shell: bash
         - os: windows-latest
           shell: powershell
+        exclude:
+        - node-version: 12.x
+          platform:
+            os: macos-latest
+        - node-version: 14.x
+          platform:
+            os: macos-latest
       fail-fast: false
 
     runs-on: ${{ matrix.platform.os }}
